@@ -43,7 +43,10 @@ class Run:
         # Try to get id from identical previous run.
         run_id = None
         for path in run_dir.iterdir():
-            other_config = toml.load(path/"run_config.toml")
+            try:
+                other_config = toml.load(path/"run_config.toml")
+            except NotADirectoryError:
+                continue
             if config == from_dict(RunConfig, other_config):  # Other config matches.
                 run_id = path.name
                 with open(path/"status.txt") as f:
@@ -168,7 +171,7 @@ def schedule_runs(configs: list[RunConfig], gpu_budget: int, gpu_per_node: int,
 
         # Starting run.
         run.status = RunStatus.running
-        with Popen(["sbatch", "--reservation=all_nodes", run.home/"nanotron.sbatch"]) as proc:
+        with Popen(["sbatch", run.home/"nanotron.sbatch"]) as proc:
             proc.wait()
         time.sleep(0.5)  # Just to make sure squeue is updated next time we call, probably not necessary.
         print("---")

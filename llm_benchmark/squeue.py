@@ -16,9 +16,9 @@ def get_jobs() -> list[Job]:
         json_txt = "".join(proc.stdout)
         proc.wait()
         jobs_raw = json.loads(json_txt)
-    return [Job(job["job_id"], job["name"], job["account"], job["node_count"]["number"])
+    return [Job(job["job_id"], job["name"], job["user_name"], job["node_count"]["number"])
             for job in jobs_raw["jobs"]]
 
 
-def used_nodes(user: str = "ahernnde") -> int:
+def used_nodes(user: str = "ctianche") -> int:
     return sum(job.nodes for job in get_jobs() if job.user == user)
