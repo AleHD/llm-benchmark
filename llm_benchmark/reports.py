@@ -1,7 +1,7 @@
 import shutil
-import warnings
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import toml
@@ -32,7 +32,7 @@ def extract_raw(path: Path) -> pd.DataFrame:
         try:
             pb.ParseFromString(data[1])  
         except DecodeError:
-            warnings.warn("Couldn't decode the entire wandb file, using incomplete data")
+            pass
 
         record_type = pb.WhichOneof("record_type")
         if record_type == "history":
@@ -42,24 +42,36 @@ def extract_raw(path: Path) -> pd.DataFrame:
     return pd.DataFrame(raw)
 
 
-def get_raw(run_dir: Path) -> pd.DataFrame:
+def get_raw(run_dir: Path, skip_first_steps: bool = True,
+            return_failed: bool = False) -> pd.DataFrame:
+
     df = pd.DataFrame()
     for path in run_dir.iterdir():
-        # If not completed run, ignore.
+        if not path.is_dir():
+            continue
         with open(path/"status.txt") as f:
             status = "".join(f.read().strip())
-        if status != RunStatus.completed.value:
-            continue
-        run_config = toml.load(path/"run_config.toml")
-        run_config["run_id"] = path.name
 
-        # Get wandb raw data.
-        wandb_run_dir, = (path/"wandb").glob("run*")
-        wandb_file, = (child for child in wandb_run_dir.iterdir()
-                       if child.suffix == ".wandb" )
-        logs = extract_raw(wandb_file)
-        logs = logs.assign(**run_config)
-        df = pd.concat([df, logs], ignore_index=True)
+        if status == RunStatus.completed.value:
+            run_config = toml.load(path/"run_config.toml")
+            run_config["run_id"] = path.name
+            run_config["success"] = True
+
+            # Get wandb raw data.
+            wandb_run_dir, = (path/"wandb").glob("run*")
+            wandb_file, = (child for child in wandb_run_dir.iterdir()
+                           if child.suffix == ".wandb" )
+            logs = extract_raw(wandb_file)
+            logs = logs.assign(**run_config)
+            df = pd.concat([df, logs], ignore_index=True)
+        elif status == RunStatus.failed.value and return_failed:
+            run_config = toml.load(path/"run_config.toml")
+            run_config["success"] = False
+            df = pd.concat([df, pd.DataFrame([run_config])], ignore_index=True)
+
+    df["gpus"] = df["tp"]*df["pp"]*df["dp"]
+    if skip_first_steps:
+        df = df[pd.isna(df["step"]) | (df["step"] > 1)]
     return df
 
 
@@ -70,16 +82,51 @@ def make_report(run_dir: Path, out: Path, exists_ok: bool):
     out.mkdir()
 
     df = get_raw(run_dir)
-    df = df[df["step"] > 1]  # Skip the first two steps as they are generally slower.
-    df["gpus"] = df["tp"]*df["pp"]*df["dp"]
 
     # Save raw csvs.
+    print("Saving raw csv...")
     df.to_csv(out/"raw.csv")
-    mean_df = df.groupby(["run_id", "model"]).agg("mean")
+    by = ["run_id", "model", "success", "gpus", "tp", "dp", "pp", "micro_batch_size"]
+    mean_df = df.groupby(by).agg("mean").reset_index()
     mean_df.to_csv(out/"mean.csv")
 
-    # Simple scaling graph: Each model has a plot, in each plot x=num_gpus, y=tokens_per_second
-    sns.relplot(data=df, x="gpus", y="tokens_per_sec_per_gpu", col="model")
-    plt.savefig(out/"scaling.pdf")
+    # Create simply summary.csv where we only list 
+    print("Saving summary csv...")
+    relevant = ["run_id", "model", "gpus", "tp", "dp", "pp",
+                "micro_batch_size", "success", "tokens_per_sec_per_gpu",
+                "tokens_per_sec"]
+    all_df = get_raw(run_dir, return_failed=True)
+    fail_df = all_df.loc[~all_df["success"], relevant]
+    relevant_df = pd.concat([mean_df[relevant], fail_df], ignore_index=True)
+    relevant_df = relevant_df.sort_values(by=["model", "gpus", "tp", "dp", "pp", "micro_batch_size"])
+    relevant_df.to_csv(out/"summary.csv")
 
+    # Matrix of heatmaps, for each model and for each GPU count, a heatmap where
+    # x=tp, y=pp and color=mean_tokens_per_second.
+    print("Saving heatmap grid plot...")
+    models = df["model"].unique().tolist()
+    gpus = sorted(df["gpus"].unique().tolist())
+    fig = plt.figure(figsize=(4*len(gpus), 4*len(models)))
+    for i, model in enumerate(models):
+        for j, gpu in enumerate(gpus):
+            plt.subplot(len(models), len(gpus), 1 + j + i*len(models))
+            plt.title(f"Model={model}. GPU count={gpu}")
+            #subdf = mean_df[(mean_df["model"] == model) & (mean_df["gpus"] == gpu)]
+            subdf = relevant_df[(relevant_df["model"] == model) & (relevant_df["gpus"] == gpu)]
+            subdf = subdf[["tp", "pp", "tokens_per_sec"]]
+            subdf = subdf.groupby(["tp", "pp"]).agg("max").reset_index()  # Only show the mbz that maximizes tokens_per_sec.
+            subdf.loc[pd.isna(subdf["tokens_per_sec"]), "tokens_per_sec"] = 0.0
+            subdf = subdf.pivot(index="tp", columns="pp", values="tokens_per_sec")
+            sns.heatmap(subdf, annot=True, cbar=False, ax=plt.gca())
+    plt.savefig(out/"heatgrid.pdf")
+    plt.close(fig)
+
+    # Simple scaling graph: Each model has a plot, in each plot x=num_gpus, y=tokens_per_second_per_gpu.
+    print("Saving scaling graph...")
+    subdf = mean_df.groupby(["model", "gpus"]).agg("max").reset_index()
+    sns.relplot(data=subdf, x="gpus", y="tokens_per_sec_per_gpu", col="model", kind="line")
+    plt.savefig(out/"scaling_per_gpu.pdf")
+    # Simple scaling graph: Each model has a plot, in each plot x=num_gpus, y=tokens_per_second.
+    sns.relplot(data=subdf, x="gpus", y="tokens_per_sec", col="model", kind="line")
+    plt.savefig(out/"scaling.pdf")
 
