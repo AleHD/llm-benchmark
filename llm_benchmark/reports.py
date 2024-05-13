@@ -115,6 +115,7 @@ def make_report(run_dir: Path, out: Path, exists_ok: bool):
             subdf = relevant_df[(relevant_df["model"] == model) & (relevant_df["gpus"] == gpu)]
             subdf = subdf[["tp", "pp", "tokens_per_sec"]]
             subdf = subdf.groupby(["tp", "pp"]).agg("max").reset_index()  # Only show the mbz that maximizes tokens_per_sec.
+            subdf.loc[pd.isna(subdf["tokens_per_sec"]), "tokens_per_sec"] = 0.0
             subdf = subdf.pivot(index="tp", columns="pp", values="tokens_per_sec")
             sns.heatmap(subdf, annot=True, cbar=False, ax=plt.gca())
     plt.savefig(out/"heatgrid.pdf")
@@ -128,5 +129,4 @@ def make_report(run_dir: Path, out: Path, exists_ok: bool):
     # Simple scaling graph: Each model has a plot, in each plot x=num_gpus, y=tokens_per_second.
     sns.relplot(data=subdf, x="gpus", y="tokens_per_sec", col="model", kind="line")
     plt.savefig(out/"scaling.pdf")
-
 

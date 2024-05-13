@@ -17,7 +17,7 @@ def get_jobs() -> list[Job]:
         proc.wait()
         jobs_raw = json.loads(json_txt)
     return [Job(job["job_id"], job["name"], job["user_name"], job["node_count"]["number"])
-            for job in jobs_raw["jobs"]]
+            for job in jobs_raw["jobs"] if job["job_state"] == "RUNNING"]
 
 
 def used_nodes(user: str = "ahernnde") -> int:

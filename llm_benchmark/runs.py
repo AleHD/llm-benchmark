@@ -21,6 +21,7 @@ class RunStatus(Enum):
     running = "running"
     failed = "failed"
     completed = "completed"
+    oom = "oom"
 
 
 class Run:
@@ -50,9 +51,13 @@ class Run:
                 run_id = path.name
                 with open(path/"status.txt") as f:
                     other_status = RunStatus[f.read().strip()]
-                if other_status == RunStatus.failed:
+                if other_status == RunStatus.failed and not is_oom(path):
                     shutil.rmtree(path)
                     status = RunStatus.init
+                elif other_status == RunStatus.failed:  # and is oom
+                    status = RunStatus.oom
+                    with open(path/"status.txt", "w+") as f:
+                        print(status.value, file=f)
                 else:
                     status = other_status
                 break
@@ -91,6 +96,10 @@ class Run:
     @property
     def status(self) -> RunStatus:
         with open(self.home/"status.txt") as f:
+            status = RunStatus["".join(f.read().strip())]
+        if status == "failed" and self._is_oom():
+            self.status = RunStatus.oom
+        with open(self.home/"status.txt") as f:
             return RunStatus["".join(f.read().strip())]
 
     @status.setter
@@ -126,6 +135,22 @@ class Run:
         })
         data["wandb"] = {"dir": str(self.home)}
         return yaml.dump(data)
+
+
+def is_oom(home: Path) -> bool:
+    # Check log, if "OutOfMemoryError" is mentioned, then we set OOM as status.
+    if not (home/"logs").exists():
+        return False
+    logs = list((home/"logs").iterdir())
+    if len(logs) == 0:
+        return False
+    assert len(logs) == 1
+    with open(logs[0]) as f:
+        for line in f:
+            if "OutOfMemoryError" in line:
+                return True
+    return False
+
 
 def wait(t: float):
     time.sleep(2)
@@ -172,8 +197,9 @@ def schedule_runs(configs: list[RunConfig], gpu_budget: int, gpu_per_node: int,
         run.status = RunStatus.running
         with Popen(["sbatch", run.home/"nanotron.sbatch"]) as proc:
             proc.wait()
-        time.sleep(0.5)  # Just to make sure squeue is updated next time we call, probably not necessary.
+        time.sleep(2)  # Just to make sure squeue is updated next time we call.
         print("---")
+        print()
     print()
 
     # Wait until all jobs end.
@@ -192,4 +218,5 @@ def schedule_runs(configs: list[RunConfig], gpu_budget: int, gpu_per_node: int,
     print("Total runs skipped:", skipped)
     print("Total runs completed:", len([run for run in runs if run.status == RunStatus.completed]))
     print("Total runs failed:", len([run for run in runs if run.status == RunStatus.failed]))
+    print("Total runs oom:", len([run for run in runs if run.status == RunStatus.oom]))
     print("Goodbye")
