@@ -3,7 +3,7 @@
 #SBATCH --job-name=nanotron-{{ run_id }}
 #SBATCH --nodes={{ n_nodes }}
 #SBATCH --ntasks-per-node=1
-#SBATCH --time=24:00:00
+#SBATCH --time=1:00:00
 
 # Misc initializations.
 set -x

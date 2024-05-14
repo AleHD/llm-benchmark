@@ -21,7 +21,8 @@ class RunConfig:
     pp: int = 1
     model: Model = Model.llama_3_8b
     sequence_length: int = 4096
-    batch_size: int = 256  # Roughly 1M tokens with 4096 seq len.
+    num_micro_batch: int = 8
+    # batch_size: int = 256  # Roughly 1M tokens with 4096 seq len.
     micro_batch_size: int = 1
 
     def __post_init__(self):
@@ -29,9 +30,16 @@ class RunConfig:
         assert self.dp > 0
         assert self.pp > 0
         assert self.sequence_length > 0
-        assert self.batch_size > 0
+        assert self.num_micro_batch > 0
+        # assert self.batch_size > 0
         assert self.micro_batch_size > 0
-        assert self.batch_size % (self.micro_batch_size*self.dp) == 0
+        
+        if self.pp > 1:
+            # if pp enabled, ensure num_micro_batch is a multiple (>=2) of pp to avoid large bubble.
+            if self.num_micro_batch < 2 * self.pp:
+                self.num_micro_batch = 2 * self.pp
+                print(f'Warning: PP enabled, num_micro_batch adjusted to {self.num_micro_batch}')
+            self.batch_size = self.micro_batch_size * self.dp * self.num_micro_batch
 
     def asdict(self) -> dict[str, str | int]:
         result = asdict(self)
