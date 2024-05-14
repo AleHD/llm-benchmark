@@ -131,6 +131,11 @@ class Run:
         data["model"]["model_config"].update(get_llama_config(self.config.model))
         data["parallelism"].update({"tp": self.config.tp, "dp": self.config.dp,
                                     "pp": self.config.pp})
+        # zero-1 for dp > 1, otherwise zero-0
+        if self.config.dp > 1:
+            data["optimizer"].update({"zero_stage": 1})
+        else:
+            data["optimizer"].update({"zero_stage": 0})
         data["tokenizer"] = {"tokenizer_name_or_path": get_llama_tokenizer(self.config.model)}
         acc = self.config.num_micro_batch
         data["tokens"].update({

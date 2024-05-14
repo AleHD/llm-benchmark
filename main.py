@@ -59,7 +59,7 @@ if __name__ == "__main__":
     run_parser = subparsers.add_parser("run")
     run_parser.add_argument("-r", "--run_files", type=Path, nargs="+",
                             help="The .toml runfiles")
-    run_parser.add_argument("--run-mode", type=str, default="default", choices=["default", "mbz"],
+    run_parser.add_argument("--run-mode", type=str, default="mbz", choices=["default", "mbz"],
                             help="The run mode, mbz stands for micro batch size adaptation.")
     run_parser.add_argument("-g", "--gpu-budget", type=int, default=128,
                             help="Limit the nodes to ask for")
