@@ -21,7 +21,7 @@ class RunConfig:
     pp: int = 1
     model: Model = Model.llama_3_8b
     sequence_length: int = 4096
-    num_micro_batch: int = 8
+    num_micro_batch: int = 16
     # batch_size: int = 256  # Roughly 1M tokens with 4096 seq len.
     micro_batch_size: int = 1
 

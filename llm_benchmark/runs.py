@@ -175,7 +175,7 @@ def get_max_mbz(mapping: list[str], mbz_list: list[int], run_dir: Path):
     # mapping maps the index of mbz_list to the run_id
     assert len(mbz_list) == 2, "TODO: support more than 2 mbz"
     max_alloc_mem = [math.inf for _ in range(len(mbz_list))]
-    device_mem_avail = 96 * 1024 * 0.95 # 96 GB
+    device_mem_avail = 96 * 1024 * 0.85 # 96 GB
     
     for i, mbz in enumerate(mbz_list):
         print(f"Checking mbz: {mbz}")
@@ -207,7 +207,7 @@ def get_max_mbz(mapping: list[str], mbz_list: list[int], run_dir: Path):
                     match = pattern.search(decoded_line)
                     if match:
                         max_alloc_history.append(int(match.group(1)))
-                        print(f"Found max alloc {max_alloc_history[-1]} in line {line_no}")
+                        # print(f"Found max alloc {max_alloc_history[-1]} in line {line_no}")
                     # Check if actually finished
                     match_finished = finished_pattern.search(decoded_line)
                     if match_finished:
@@ -227,8 +227,8 @@ def get_max_mbz(mapping: list[str], mbz_list: list[int], run_dir: Path):
     if max_alloc_mem[1] == math.inf:
         return mbz_list[0]
     result = mbz_list[0] + math.floor((device_mem_avail - max_alloc_mem[0]) / (max_alloc_mem[1] - max_alloc_mem[0])) * (mbz_list[1] - mbz_list[0])
-    print(f"-----mbz1: {mbz_list[0]}, mbz2: {mbz_list[1]}, max_alloc1: {max_alloc_mem[0]}, max_alloc2: {max_alloc_mem[1]}, max_mbz: {result}")
-    return result
+    # print(f"-----mbz1: {mbz_list[0]}, mbz2: {mbz_list[1]}, max_alloc1: {max_alloc_mem[0]}, max_alloc2: {max_alloc_mem[1]}, max_mbz: {result}")
+    return result if result % 2 == 0 else result - 1
 
 def schedule_mbz_adapt_runs(configs: list[RunConfig], gpu_budget: int, gpu_per_node: int,
                   run_dir: Path, testrun_dir: Path, template_dir: Path):

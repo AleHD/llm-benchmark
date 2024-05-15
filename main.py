@@ -5,8 +5,8 @@ from pathlib import Path
 import toml
 
 from llm_benchmark.runs import schedule_runs, schedule_mbz_adapt_runs
-from llm_benchmark.generate_config import Range, generate
-from llm_benchmark.reports import make_report
+from llm_benchmark.generate_config import Range, generate, generate_mbz_adapt
+from llm_benchmark.reports import make_report, get_raw
 from llm_benchmark.runconfig import Model, RunConfig, from_dict
 
 
@@ -24,16 +24,25 @@ def int_or_interval(val: str) -> Range:
 
 # Determine the maximum mb size that fits into gpu memory and write it to original config file.
 def test_mbz_run(run_files: list[Path], gpu_budget: int, gpu_per_node: int, run_dir: Path,
-        template_dir: Path, testrun_dir: Path):
+        template_dir: Path, testrun_dir: Path, out_dir: Path, autogen_config: bool = True):
     # Get configurations to run.
     configs = []
-    for run_file in run_files:
-        configs += toml.load(run_file)["configs"]
-    configs = [from_dict(RunConfig, config) for config in configs] 
+    if autogen_config:
+        assert len(run_files) == 1
+        configs = generate_mbz_adapt(run_files[0])
+    else:
+        for run_file in run_files:
+            configs += toml.load(run_file)["configs"]
+    configs = [from_dict(RunConfig, config) for config in configs]
 
     # Run the configs.
     schedule_mbz_adapt_runs(configs, gpu_budget, gpu_per_node, run_dir, testrun_dir, template_dir)
     
+    out_dir.mkdir(exist_ok=True)
+    df = get_raw(run_dir)
+    # Save raw csvs.
+    print("Saving raw csv...")
+    df.to_csv(out_dir/"raw.csv")
 
 def run(run_files: list[Path], gpu_budget: int, gpu_per_node: int, run_dir: Path,
         template_dir: Path):
@@ -52,6 +61,7 @@ if __name__ == "__main__":
     parser = ArgumentParser()
     parser.add_argument("--run-dir", type=Path, default=Path("runs"))
     parser.add_argument("--testrun-dir", type=Path, default=Path("testruns"))
+    parser.add_argument("-o", "--out", type=Path, default=Path("reports/report"))
     subparsers = parser.add_subparsers(dest="action")
 
 
@@ -66,10 +76,10 @@ if __name__ == "__main__":
     run_parser.add_argument("--gpu-per-node", type=int, default=4,
                             help="How many gpus are per each node")
     run_parser.add_argument("--template-dir", type=Path, default=Path("templates"))
+    run_parser.add_argument("--auto-config", action="store_true", help="Automatically generate configurations")
 
     # Analyze arguments.
     analyze_parser = subparsers.add_parser("analyze")
-    analyze_parser.add_argument("-o", "--out", type=Path, default=Path("reports/report"))
     analyze_parser.add_argument("--exists-ok", action="store_true")
 
     # Generate config arguments.
@@ -102,7 +112,7 @@ if __name__ == "__main__":
         elif args.run_mode == "mbz":
             args.testrun_dir.mkdir(exist_ok=True)     
             test_mbz_run(args.run_files, args.gpu_budget, args.gpu_per_node, args.run_dir.absolute(),
-                args.template_dir.absolute(), args.testrun_dir.absolute())
+                args.template_dir.absolute(), args.testrun_dir.absolute(), args.out.absolute(), args.auto_config)
     elif args.action == "analyze":
         make_report(args.run_dir, args.out, args.exists_ok)
     else:

@@ -3,7 +3,7 @@ import toml
 from pathlib import Path
 from typing import TypeVar, Literal
 
-from .runconfig import Model
+from .runconfig import Model, RunConfig
 
 
 Range = tuple[int, int | Literal[math.inf]]
@@ -38,3 +38,29 @@ def generate(out: Path, tps: Range, dps: Range, pps: Range, gpus: Range,
     # Save as toml.
     with open(out, "w+") as f:
         toml.dump({"configs": configs}, f)
+
+def generate_mbz_adapt(out: Path, models: set[Model] = {Model.llama_3_8b}, 
+                       gpus_per_node: int=4, seqs: set[int] = {4096}) -> list[dict]:
+    assert gpus_per_node == 4
+    tps = [1, 2, 4]
+    dps = [2, 4]
+    pps = [1, 2, 4, 8]
+    num_mb_factors = [2,4]
+    min_gpus, max_gpus = 16, 32
+
+    configs = []
+    for model in models:
+        for seq in seqs:
+            for tp in tps:
+                for dp in dps:
+                    for pp in pps:
+                        if tp*dp*pp < min_gpus or tp*dp*pp > max_gpus:
+                            continue
+                        for factor in num_mb_factors:
+                            num_mb = factor * pp
+                            configs.append({"tp": tp, "dp": dp, "pp": pp, "model": model.value,
+                                            "sequence_length": seq, "num_micro_batch": num_mb})    
+    # Save as toml.
+    with open(out, "w") as f:
+        toml.dump({"configs": configs}, f)
+    return configs
