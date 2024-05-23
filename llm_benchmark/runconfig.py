@@ -38,6 +38,10 @@ class RunConfig:
         result["model"] = result["model"].value
         return result
 
+    @property
+    def gpu(self) -> int:
+        return self.pp*self.dp*self.tp
+
 
 def from_dict(data_class, data: dict):
     type_hooks = {Model: lambda x: Model[x]}

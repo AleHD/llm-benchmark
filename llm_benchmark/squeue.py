@@ -21,4 +21,4 @@ def get_jobs() -> list[Job]:
 
 
 def used_nodes(user: str = "ahernnde") -> int:
-    return sum(job.nodes for job in get_jobs() if job.user == user)
+    return sum(job.nodes for job in get_jobs() if job.user == user and "nanotron" in job.name)

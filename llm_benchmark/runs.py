@@ -89,6 +89,8 @@ class Run:
             nano_config = self._get_nano_config(template_dir)
             with open(self.home/"nanotron_config.yaml", "w+") as f:
                 print(nano_config, file=f)
+            # Copy slurm.toml.
+            shutil.copy(template_dir/"slurm.toml", self.home/"slurm.toml")
 
     def __lt__(self, other: Run) -> bool:
         return int(self.run_id) < int(other.run_id)
@@ -97,7 +99,7 @@ class Run:
     def status(self) -> RunStatus:
         with open(self.home/"status.txt") as f:
             status = RunStatus["".join(f.read().strip())]
-        if status == "failed" and self._is_oom():
+        if status == RunStatus.failed and is_oom(self.home):
             self.status = RunStatus.oom
         with open(self.home/"status.txt") as f:
             return RunStatus["".join(f.read().strip())]
@@ -133,6 +135,7 @@ class Run:
             "sequence_length": self.config.sequence_length,
             "batch_accumulation_per_replica": acc,
         })
+        data["optimizer"]["zero_stage"] = 1 if self.config.dp > 1 else 0
         data["wandb"] = {"dir": str(self.home)}
         return yaml.dump(data)
 
@@ -146,9 +149,12 @@ def is_oom(home: Path) -> bool:
         return False
     assert len(logs) == 1
     with open(logs[0]) as f:
-        for line in f:
-            if "OutOfMemoryError" in line:
-                return True
+        try:
+            for line in f:
+                if "OutOfMemoryError" in line:
+                    return True
+        except UnicodeError:
+            return False
     return False
 
 
@@ -188,14 +194,17 @@ def schedule_runs(configs: list[RunConfig], gpu_budget: int, gpu_per_node: int,
 
         # Wait until we have all available GPUs.
         while squeue.used_nodes() + run.n_nodes > gpu_budget//gpu_per_node:
+            current_runs = ",".join(str(run.run_id) for run in runs
+                                    if run.status == RunStatus.running)
             print("Can't start this run with current GPU budget, used nodes:",
-                  squeue.used_nodes(), "Waiting", end="", flush=True)
+                  squeue.used_nodes(), "Runs:", current_runs, "Waiting",
+                  end="", flush=True)
             wait(10)
         print("GPU resources available, starting run!")
 
         # Starting run.
         run.status = RunStatus.running
-        with Popen(["sbatch", run.home/"nanotron.sbatch"]) as proc:
+        with Popen(["sbatch", "--contiguous", "nanotron.sbatch"], cwd=run.home) as proc:
             proc.wait()
         time.sleep(2)  # Just to make sure squeue is updated next time we call.
         print("---")

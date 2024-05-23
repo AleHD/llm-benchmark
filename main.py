@@ -4,7 +4,7 @@ from pathlib import Path
 
 import toml
 
-from llm_benchmark.runs import schedule_runs
+from llm_benchmark.runs import RunStatus, schedule_runs
 from llm_benchmark.generate_config import Range, generate
 from llm_benchmark.reports import make_report
 from llm_benchmark.runconfig import Model, RunConfig, from_dict
@@ -33,6 +33,37 @@ def run(run_files: list[Path], gpu_budget: int, gpu_per_node: int, run_dir: Path
 
     # Run the configs.
     schedule_runs(configs, gpu_budget, gpu_per_node, run_dir, template_dir)
+
+
+def lookup(statuses: list[RunStatus], gpus: Range, tps: Range, dps: Range, pps: Range,
+           mbzs: Range, models: list[Model], seqs: Range, run_dir: Path):
+
+    def matches(config: RunConfig, status: RunStatus) -> bool:
+        if len(statuses) > 0 and status not in statuses:
+            return False
+        if len(models) > 0 and config.model not in models:
+            return False
+        if gpus[0] > config.gpu or gpus[1] < config.gpu:
+            return False
+        if tps[0] > config.tp or tps[1] < config.tp:
+            return False
+        if dps[0] > config.dp or dps[1] < config.dp:
+            return False
+        if pps[0] > config.pp or pps[1] < config.pp:
+            return False
+        if mbzs[0] > config.micro_batch_size or mbzs[1] < config.micro_batch_size:
+            return False
+        if seqs[0] > config.sequence_length or seqs[1] < config.sequence_length:
+            return False
+        return True
+
+    for path in sorted(run_dir.iterdir(), key=lambda path: int(path.name)):
+        run_config = from_dict(RunConfig, toml.load(path/"run_config.toml"))
+        with open(path/"status.txt") as f:
+            status = RunStatus[f.read().strip()]
+        if matches(run_config, status):
+            run_id = path.name
+            print("Match:", run_id, run_config)
 
 
 if __name__ == "__main__":
@@ -77,6 +108,27 @@ if __name__ == "__main__":
     gen_parser.add_argument("-m", "--model", type=lambda name: Model[name], nargs="+",
                             default=[Model.llama_3_8b])
     gen_parser.add_argument("-s", "--seq", type=int, nargs="+", default=[4096])
+    gen_parser.add_argument("-i", "--if", default="True", dest="condition",
+                            help=("String to filter out some configuration combinations. "
+                                  "Examples: `tp*pp == 1`, `pp in {2, 4, 8}`, `pp/mbz == 1`, etc. "
+                                  "Possible variables to use=tp,pp,dp,gpu,mbz,model,seq."))
+
+    # Lookup.
+    lookup_parser = subparsers.add_parser(
+        "lookup",
+        help=("Look for runs that match the arguments given. Look at `generate-config` help "
+              "for more information about the arguments expected. For arguments that "
+              "expect a list of names (--status and --model), passing an empty list of names "
+              "assumes match all")
+    )
+    lookup_parser.add_argument("-s", "--status", type=lambda name: RunStatus[name], nargs="*", default=[])
+    lookup_parser.add_argument("-g", "--gpu", type=int_or_interval, default=int_or_interval(":"))
+    lookup_parser.add_argument("-t", "--tp", type=int_or_interval, default=int_or_interval(":"))
+    lookup_parser.add_argument("-d", "--dp", type=int_or_interval, default=int_or_interval(":"))
+    lookup_parser.add_argument("-p", "--pp", type=int_or_interval, default=int_or_interval(":"))
+    lookup_parser.add_argument("-z", "--mbz", type=int_or_interval, default=int_or_interval(":"))
+    lookup_parser.add_argument("-m", "--model", type=lambda name: Model[name], nargs="*", default=[])
+    lookup_parser.add_argument("--seq", type=int_or_interval, default=int_or_interval(":"))
 
     # Call main.
     args = parser.parse_args()
@@ -84,6 +136,10 @@ if __name__ == "__main__":
         run(args.run_files, args.gpu_budget, args.gpu_per_node, args.run_dir.absolute(),
             args.template_dir.absolute())
     elif args.action == "analyze":
-        make_report(args.run_dir, args.out, args.exists_ok)
+        make_report(args.run_dir.absolute(), args.out.absolute(), args.exists_ok)
+    elif args.action == "generate-config":
+        generate(args.out.absolute(), args.tp, args.dp, args.pp, args.gpu, args.mbz,
+                 args.model, args.seq, args.condition)
     else:
-        generate(args.out, args.tp, args.dp, args.pp, args.gpu, args.mbz, args.model, args.seq)
+        lookup(args.status, args.gpu, args.tp, args.dp, args.pp, args.mbz, args.model, args.seq,
+               args.run_dir.absolute())

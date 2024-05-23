@@ -31,7 +31,7 @@ optimizer:
     name: adamW
     torch_adam_is_fused: true
   weight_decay: 0.01
-  zero_stage: 0
+  zero_stage: 1
 parallelism:
   expert_parallel_size: 1
   pp_engine: 1f1b

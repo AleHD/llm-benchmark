@@ -37,6 +37,8 @@ def extract_raw(path: Path) -> pd.DataFrame:
         record_type = pb.WhichOneof("record_type")
         if record_type == "history":
             row = {item.key: maybe_num(item.value_json) for item in pb.history.item}
+            if len(row) == 0:
+                continue
             row["step"] = row.pop("_step")
             raw.append(row)
     return pd.DataFrame(raw)
@@ -64,8 +66,9 @@ def get_raw(run_dir: Path, skip_first_steps: bool = True,
             logs = extract_raw(wandb_file)
             logs = logs.assign(**run_config)
             df = pd.concat([df, logs], ignore_index=True)
-        elif status == RunStatus.failed.value and return_failed:
+        elif status in {RunStatus.failed.value, RunStatus.oom.value} and return_failed:
             run_config = toml.load(path/"run_config.toml")
+            run_config["run_id"] = path.name
             run_config["success"] = False
             df = pd.concat([df, pd.DataFrame([run_config])], ignore_index=True)
 
@@ -130,3 +133,8 @@ def make_report(run_dir: Path, out: Path, exists_ok: bool):
     sns.relplot(data=subdf, x="gpus", y="tokens_per_sec", col="model", kind="line")
     plt.savefig(out/"scaling.pdf")
 
+    # Microbatch scaling, same as previous plot but with y=max microbatch size.
+    print("Saving mbz graph...")
+    subdf = mean_df.groupby(["model", "gpus"]).agg("max").reset_index()
+    sns.relplot(data=subdf, x="gpus", y="micro_batch_size", col="model", kind="line")
+    plt.savefig(out/"scaling_mbz.pdf")

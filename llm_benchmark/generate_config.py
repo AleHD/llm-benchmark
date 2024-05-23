@@ -10,7 +10,12 @@ Range = tuple[int, int | Literal[math.inf]]
 
 def generate(out: Path, tps: Range, dps: Range, pps: Range, gpus: Range,
              mbzs: Range,  models: set[Model] = {Model.llama_3_8b},
-             seqs: set[int] = {4096}):
+             seqs: set[int] = {4096}, condition: str = "True"):
+
+    def eval_cond() -> bool:
+        ctx = {"tp": tp, "dp": dp, "pp": pp, "gpu": gpu, "mbz": mbz,
+               "model": model, "seq": seqs}
+        return eval(condition, {}, ctx)
 
     # Initial configuration.
     min_tp, max_tp = tps
@@ -31,10 +36,11 @@ def generate(out: Path, tps: Range, dps: Range, pps: Range, gpus: Range,
                     for dp in range(min_dp, min(max_dp, max_gpu) + 1):
                         for pp in range(min_pp, min(max_pp, max_gpu) + 1):
                             for mbz in range(min_mbz, max_mbz + 1):
-                                if tp*dp*pp == gpu and 256 % (mbz*dp) == 0:
+                                if tp*dp*pp == gpu and 256 % (mbz*dp) == 0 and eval_cond():
                                     configs.append({"tp": tp, "dp": dp, "pp": pp, "model": model.value,
                                                     "sequence_length": seq, "micro_batch_size": mbz})
 
     # Save as toml.
+    print("Saving", len(configs), "configurations")
     with open(out, "w+") as f:
         toml.dump({"configs": configs}, f)
