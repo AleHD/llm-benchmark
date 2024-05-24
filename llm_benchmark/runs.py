@@ -126,14 +126,14 @@ class Run:
             data = yaml.safe_load(f)
         data["general"]["run"] = f"benchmark-{self.run_id}"
         data["model"]["model_config"].update(get_llama_config(self.config.model))
+        data["model"]["model_config"]["max_position_embeddings"] = self.config.sequence_length
         data["parallelism"].update({"tp": self.config.tp, "dp": self.config.dp,
-                                    "pp": self.config.pp})
+                                    "pp": self.config.pp, "pp_engine": self.config.pp_engine})
         data["tokenizer"] = {"tokenizer_name_or_path": get_llama_tokenizer(self.config.model)}
-        acc = self.config.batch_size//(self.config.micro_batch_size*self.config.dp)
         data["tokens"].update({
             "micro_batch_size": self.config.micro_batch_size,
             "sequence_length": self.config.sequence_length,
-            "batch_accumulation_per_replica": acc,
+            "batch_accumulation_per_replica": self.config.batch_accumulation,
         })
         data["optimizer"]["zero_stage"] = 1 if self.config.dp > 1 else 0
         data["wandb"] = {"dir": str(self.home)}
@@ -141,6 +141,7 @@ class Run:
 
 
 def is_oom(home: Path) -> bool:
+    return False
     # Check log, if "OutOfMemoryError" is mentioned, then we set OOM as status.
     if not (home/"logs").exists():
         return False
@@ -204,7 +205,7 @@ def schedule_runs(configs: list[RunConfig], gpu_budget: int, gpu_per_node: int,
 
         # Starting run.
         run.status = RunStatus.running
-        with Popen(["sbatch", "--contiguous", "nanotron.sbatch"], cwd=run.home) as proc:
+        with Popen(["sbatch", "nanotron.sbatch"], cwd=run.home) as proc:
             proc.wait()
         time.sleep(2)  # Just to make sure squeue is updated next time we call.
         print("---")

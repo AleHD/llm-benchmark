@@ -21,17 +21,17 @@ class RunConfig:
     pp: int = 1
     model: Model = Model.llama_3_8b
     sequence_length: int = 4096
-    batch_size: int = 256  # Roughly 1M tokens with 4096 seq len.
     micro_batch_size: int = 1
+    batch_accumulation: int = 4
+    pp_engine: str = "1f1b"
 
     def __post_init__(self):
         assert self.tp > 0
         assert self.dp > 0
         assert self.pp > 0
         assert self.sequence_length > 0
-        assert self.batch_size > 0
+        assert self.batch_accumulation > 0
         assert self.micro_batch_size > 0
-        assert self.batch_size % (self.micro_batch_size*self.dp) == 0
 
     def asdict(self) -> dict[str, str | int]:
         result = asdict(self)

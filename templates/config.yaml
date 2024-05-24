@@ -34,8 +34,7 @@ optimizer:
   zero_stage: 1
 parallelism:
   expert_parallel_size: 1
-  pp_engine: 1f1b
-  tp_linear_async_communication: true
+  tp_linear_async_communication: false
   tp_mode: REDUCE_SCATTER
 data_stages:
   - name: Stable Training Stage
@@ -52,7 +51,7 @@ data_stages:
       seed: 42
 lighteval: null
 tokens:
-  train_steps: 10
+  train_steps: 40
   val_check_interval: -1
 logging:
   iteration_step_info_interval: 1

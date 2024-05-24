@@ -111,7 +111,7 @@ if __name__ == "__main__":
     gen_parser.add_argument("-i", "--if", default="True", dest="condition",
                             help=("String to filter out some configuration combinations. "
                                   "Examples: `tp*pp == 1`, `pp in {2, 4, 8}`, `pp/mbz == 1`, etc. "
-                                  "Possible variables to use=tp,pp,dp,gpu,mbz,model,seq."))
+                                  "Possible variables to use=tp,pp,dp,gpu,mbz,model,seq and the math std library."))
 
     # Lookup.
     lookup_parser = subparsers.add_parser(
