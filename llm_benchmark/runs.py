@@ -127,8 +127,13 @@ class Run:
         data["general"]["run"] = f"benchmark-{self.run_id}"
         data["model"]["model_config"].update(get_llama_config(self.config.model))
         data["model"]["model_config"]["max_position_embeddings"] = self.config.sequence_length
-        data["parallelism"].update({"tp": self.config.tp, "dp": self.config.dp,
-                                    "pp": self.config.pp, "pp_engine": self.config.pp_engine})
+        data["parallelism"].update({
+            "tp": self.config.tp,
+            "dp": self.config.dp,
+            "pp": self.config.pp,
+            "pp_engine": self.config.pp_engine,
+            "recompute_layer": self.config.recompute_layer
+        })
         data["tokenizer"] = {"tokenizer_name_or_path": get_llama_tokenizer(self.config.model)}
         data["tokens"].update({
             "micro_batch_size": self.config.micro_batch_size,
@@ -136,16 +141,15 @@ class Run:
             "batch_accumulation_per_replica": self.config.batch_accumulation,
         })
         data["optimizer"]["zero_stage"] = 1 if self.config.dp > 1 else 0
-        data["wandb"] = {"dir": str(self.home)}
+        #data["wandb"] = {"dir": str(self.home)}
         return yaml.dump(data)
 
 
 def is_oom(home: Path) -> bool:
-    return False
     # Check log, if "OutOfMemoryError" is mentioned, then we set OOM as status.
     if not (home/"logs").exists():
         return False
-    logs = list((home/"logs").iterdir())
+    logs = list((home/"logs").glob("*.err"))
     if len(logs) == 0:
         return False
     assert len(logs) == 1

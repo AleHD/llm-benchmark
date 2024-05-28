@@ -1,4 +1,4 @@
-image = "/bret/scratch/cscs/ahernnde/container-image/nanotron/nanotronv1.0.sqsh"
+image = "/bret/scratch/cscs/ahernnde/container-image/llm/llm-v1.0.sqsh"
 mounts = [
 	"/bret:/bret",
 	"/etc/slurm:/etc/slurm",

@@ -1,6 +1,7 @@
 import math
 from argparse import ArgumentParser
 from pathlib import Path
+from subprocess import Popen
 
 import toml
 
@@ -64,6 +65,19 @@ def lookup(statuses: list[RunStatus], gpus: Range, tps: Range, dps: Range, pps: 
         if matches(run_config, status):
             run_id = path.name
             print("Match:", run_id, run_config)
+
+
+def log(run_dir: Path, run_id: int, err: bool):
+    ext = "err" if err else "out"
+    assert (home := run_dir/str(run_id)).exists(), "Run dir {run_dir} has no run {run_id}"
+    assert len(log_paths := list((home/"logs").glob(f"*.{ext}"))) == 1, "Run has =0 or >1 logs"
+    try:
+        with Popen(["tail", "-f", "-n", "+1", str(log_paths[0])], bufsize=1) as proc:
+            proc.wait()
+    except KeyboardInterrupt:
+        pass
+    print("---")
+    print("Log path:", log_paths[0])
 
 
 if __name__ == "__main__":
@@ -130,6 +144,10 @@ if __name__ == "__main__":
     lookup_parser.add_argument("-m", "--model", type=lambda name: Model[name], nargs="*", default=[])
     lookup_parser.add_argument("--seq", type=int_or_interval, default=int_or_interval(":"))
 
+    log_parser = subparsers.add_parser("log", help="Show the logs of a run")
+    log_parser.add_argument("run_id", type=int, help="Run id to show the log of")
+    log_parser.add_argument("-e", "--err", action="store_true", help="Show error log")
+
     # Call main.
     args = parser.parse_args()
     if args.action == "run":
@@ -140,6 +158,8 @@ if __name__ == "__main__":
     elif args.action == "generate-config":
         generate(args.out.absolute(), args.tp, args.dp, args.pp, args.gpu, args.mbz,
                  args.model, args.seq, args.condition)
-    else:
+    elif args.action == "lookup":
         lookup(args.status, args.gpu, args.tp, args.dp, args.pp, args.mbz, args.model, args.seq,
                args.run_dir.absolute())
+    else:
+        log(args.run_dir.absolute(), args.run_id, args.err)

@@ -51,7 +51,7 @@ data_stages:
       seed: 42
 lighteval: null
 tokens:
-  train_steps: 40
+  train_steps: 20
   val_check_interval: -1
 logging:
   iteration_step_info_interval: 1

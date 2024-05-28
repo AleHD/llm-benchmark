@@ -19,6 +19,7 @@ export MASTER_PORT=25678
 export MASTER_ADDR=$(hostname)
 export HF_HOME=/bret/scratch/cscs/ahernnde/huggingface
 export WANDB_API_KEY=$(cat /users/ahernnde/workspace/repos/llm-benchmark/wandb_key)
+export WANDB_DIR={{ run_root }}
 export CWD={{ run_root }}
 NAME="nanotron-{{ run_id }}"
 ARGS="-ul --environment=$PWD/slurm.toml"
@@ -27,12 +28,13 @@ ARGS="-ul --environment=$PWD/slurm.toml"
 srun $ARGS bash -c "
   # Variables.
   export CUDA_VISIBLE_DEVICES=0,1,2,3
-  export PYTHONPATH=/users/ahernnde/workspace/repos/nanotron/src
+  export PYTHONPATH=/users/ahernnde/workspace/repos/nanotron-ctc/src
   export CUDA_DEVICE_MAX_CONNECTIONS=1
   export OMP_NUM_THREADS=32
 
   # Change cwd.
-  cd /users/ahernnde/workspace/repos/nanotron/
+  #cd /users/ahernnde/workspace/repos/nanotron/
+  cd /users/ahernnde/workspace/repos/nanotron-ctc
 
   # Main script.
   torchrun --node-rank=\${SLURM_PROCID} --rdzv_endpoint \${MASTER_ADDR}:\${MASTER_PORT} --rdzv_backend c10d --nnodes {{ n_nodes }} --nproc-per-node {{ n_proc_per_node }} run_train.py --config-file $CWD/nanotron_config.yaml && echo completed > \${CWD}/status.txt || echo failed > \${CWD}/status.txt
