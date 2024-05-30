@@ -20,5 +20,5 @@ def get_jobs() -> list[Job]:
             for job in jobs_raw["jobs"] if job["job_state"] == "RUNNING"]
 
 
-def used_nodes(user: str = "ahernnde") -> int:
-    return sum(job.nodes for job in get_jobs() if job.user == user and "nanotron" in job.name)
+def used_nodes(user: str = "ahernnde", framework: str = "megatron") -> int:
+    return sum(job.nodes for job in get_jobs() if job.user == user and framework in job.name)

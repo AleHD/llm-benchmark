@@ -1,0 +1,10 @@
+model_type: llama3_8b
+bos_token_id: 128000
+eos_token_id: 128001
+hidden_size: 4096
+ffn_hidden_size: 14336
+num_attention_heads: 32
+num_layers: 32
+num_query_groups: 8
+vocab_size: 128256
+seq_length: 4096

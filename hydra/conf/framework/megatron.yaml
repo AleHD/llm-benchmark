@@ -1,0 +1,64 @@
+framework_name: megatron
+
+FRAMEWORK_HOME: TODO
+
+model_framework:
+  llama3:
+    position_embedding_type: rope
+    normalization: RMSNorm
+    swiglu: true
+    untie_embeddings_and_output_weights: true
+    disable_bias_linear: true # training args
+    make_vocab_size_divisible_by: 64
+    tokenizer_type: "Llama2Tokenizer"
+
+framework_setting:
+  network:
+    num_layers:
+    hidden_size: 
+    num_attention_heads:
+    group_query_attention:
+    ffn_hidden_size:
+    seq_length:
+    max_position_embeddings:
+    num_query_groups:
+    position_embedding_type:
+    normalization:
+    swiglu:
+    untie_embeddings_and_output_weights:
+    disable_bias_linear:
+    make_vocab_size_divisible_by:
+    tokenizer_type:
+  logging:
+    log_throughput: true
+    timing_log_level: 0
+    wandb_project: ${framework.framework_name}_${model.model_type}
+    wandb_exp_name: tp${framework.framework_setting.distributed.tensor_model_parallel_size}pp${framework.framework_setting.distributed.pipeline_model_parallel_size}mbs${framework.framework_setting.training.micro_batch_size}
+  training:
+    micro_batch_size:
+    global_batch_size:
+    train_iters: 10000
+    log_interval: 1
+    exit_interval: 8
+    use_flash_attn: true
+    optimizer: adam
+    sequence_parallel: true
+    use_mcore_models: true
+  mixed_precision:
+    bf16: true
+  optimization:
+    recompute_per_n_layers: # >0 means recompute, need reinterpretation
+    no_check_for_nan_in_loss_and_grad: true # only for throughput benchmark
+    tp_overlap: # none means default, need reinterpretation
+    dp_overlap: # need reinterpretation
+    interleaved_pp: false
+  distributed:
+    tensor_model_parallel_size:
+    pipeline_model_parallel_size:
+    use_distributed_optimizer:
+  data:
+    data_path: ${data_dir}
+    split: "949,50,1"
+    # num_workers: 0
+    tokenizer_model: ${tokenizer_file}
+    data_cache_path: ${data_cache_dir}
