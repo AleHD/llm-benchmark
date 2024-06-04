@@ -17,12 +17,13 @@ cat $0
 # Set some variables.
 export MASTER_PORT=25678
 export MASTER_ADDR=$(hostname)
-export HF_HOME={{ hf_home }}
-export WANDB_API_KEY={{ wandb_api_key }}
+export WANDB_API_KEY=$(cat "{{ wandb_api_key }}")
 export WANDB_DIR={{ run_root }}
 export CWD={{ run_root }}
+unset UENV_MOUNT_LIST
 NAME="megatron-{{ run_id }}"
 ARGS="-ul --environment={{ container_toml }}"
+{{ env_vars }}
 
 # Run main script.
 srun $ARGS bash -c "
@@ -36,5 +37,5 @@ srun $ARGS bash -c "
   cd {{ megatron_path }}
 
   # Main script.
-  torchrun --node-rank=\${SLURM_PROCID} --rdzv_endpoint \${MASTER_ADDR}:\${MASTER_PORT} --rdzv_backend c10d --nnodes {{ n_nodes }} --nproc-per-node {{ n_proc_per_node }} {{ megatron_path }}/pretrain_gpt.py {{ megatron_args }} --wandb-save-dir {{ run_root }} && echo completed > \${CWD}/status.txt || echo failed > \${CWD}/status.txt
+  torchrun --node-rank=\${SLURM_PROCID} --rdzv_endpoint \${MASTER_ADDR}:\${MASTER_PORT} --rdzv_backend c10d --nnodes {{ n_nodes }} --nproc-per-node {{ n_proc_per_node }} {{ megatron_path }}/pretrain_gpt.py {{ megatron_args }} --wandb-save-dir {{ run_root }} --tensorboard-dir {{ run_root }} && echo completed > \${CWD}/status.txt || echo failed > \${CWD}/status.txt
 "

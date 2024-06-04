@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - model: llama3_8b
+  - model: llama3_70b
   - framework: megatron
   - cluster: slurm
 
@@ -11,28 +11,27 @@ hydra:
 
 debug: True
 
-work_dir: /home/tiancheng/playground/llm-benchmark/hydra
-data_dir: ${work_dir}/data
-data_cache_dir: ${work_dir}/data_cache
-tokenizer_file: ${work_dir}/tokenizer/tokenizer.model
+work_dir: /bret/scratch/cscs/ctianche/playground/llm-benchmark/hydra
+data_dir: /bret/scratch/cscs/ctianche/playground/megatron_data/data/oscar-en-10k-meg-llama_text_document
+data_cache_dir: ${data_dir}/data_cache
+tokenizer_file: /bret/scratch/cscs/ctianche/playground/megatron_data/tokenizer/tokenizer.model
 logs_dir: ${work_dir}/${model.model_type}/logs
 template_dir: ${work_dir}/../templates
 
-WANDB_API_KEY: TODO
-HF_HOME: TODO
+WANDB_API_KEY: /bret/scratch/cscs/ctianche/playground/llm-benchmark/wandb_key
 
 train_settings:
-  num_nodes: 1
+  num_nodes: [12,16,20,24]
   gpus_per_node: 4
   gpu_memory_gb: 96  # Memory per GPU, in GB. 
-  limit_search_runs: 4 # Max number of runs to be launched in parallel for grid search.
-  output_top_n: 10  # The result will print the top N fastest training configs.
-  max_steps_per_run: 15 # Max steps per run for the grid search.
-  tflops_per_gpu: 400  # Estimated tflops per GPU.
+  # limit_search_runs: 4 # Max number of runs to be launched in parallel for grid search.
+  # output_top_n: 10  # The result will print the top N fastest training configs.
+  # max_steps_per_run: 15 # Max steps per run for the grid search.
+  # tflops_per_gpu: 400  # Estimated tflops per GPU.
   tensor_parallel_sizes: 4  # auto to use our recommendation, or a list, such as [1, 2, 4, 8]
-  pipeline_parallel_sizes: 1 # auto to use our recommendation, or a list, such as [1, 2, 4, 8, 10]
+  pipeline_parallel_sizes: 4 # auto to use our recommendation, or a list, such as [1, 2, 4, 8, 10]
   max_pipeline_parallel_size: 16
-  max_data_parallel_size: 4
+  max_data_parallel_size: 16
   micro_batch_sizes: 1  # auto to use our recommendation, or a list, such as [1, 2, 4, 8, 16]
   act_ckpt_layers: 0 # auto to use our recommendation, or a list, such as [0, 1, 2, 3]
 

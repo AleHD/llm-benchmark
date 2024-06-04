@@ -53,8 +53,11 @@ def scrape_from_logs(path: Path) -> dict:
         log = "".join(f)
 
     # Get peak memory.
-    peak_mem_MiB = max(map(float, re.findall(".*Peak reserved: (.*)MiB.*", log)))
-    peak_mem_GB = (2**20/10**9)*peak_mem_MiB
+    peak_mem_MiB = re.findall(".*Peak reserved: (.*)MiB.*", log)
+    # megatron style
+    if len(peak_mem_MiB) == 0:
+        peak_mem_MiB = re.findall(".*\| max reserved: (.*)\n", log)
+    peak_mem_GB = (2**20/10**9)*max(map(float, peak_mem_MiB))
 
     return {
         "peak_mem_GB": peak_mem_GB

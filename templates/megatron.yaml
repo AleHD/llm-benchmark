@@ -1,0 +1,48 @@
+network:
+  num-layers: 32
+  hidden-size: 
+  num-attention-heads:
+  group-query-attention: true
+  num-attention-heads:
+  ffn-hidden-size:
+  position-embedding-type: rope
+  max-position-embeddings:
+  make-vocab-size-divisible-by: 64
+  kv_channels:
+  normalization: RMSNorm
+  swiglu: true
+  untie-embeddings-and-output-weights: true
+  disable-bias-linear: true # training args
+logging:
+  log-throughput: true
+  timing-log-level: 0
+training:
+  micro-batch-size: 1
+  global-batch-size: 4
+  recompute-per-n-layers: -1 # need reinterpretation
+  no-check-for-nan-in-loss-and-grad: true # only for throughput benchmark
+  tp-overlap: false # need reinterpretation
+  train-iters: 10000
+  log-interval: 1
+  exit-interval: 8
+  use-flash-attn: true
+  optimizer: adam
+  sequence-parallel: true
+  use-mcore-models: true
+mixed-precision:
+  bf16: true
+distributed:
+  tensor-model-parallel-size: 1
+  pipeline-model-parallel-size: 1
+  overlap-grad-reduce: true
+  # ddp-bucket-size: 40000000
+  overlap-param-gather: true
+  use-distributed-optimizer: true
+data:
+  data-path: 
+  split: "949,50,1"
+  seq-length: 
+  # num-workers: 0
+  tokenizer-type: "Llama2Tokenizer"
+  tokenizer-model: 
+  data-cache-path: 

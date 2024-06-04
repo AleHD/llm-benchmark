@@ -8,6 +8,8 @@ from pathlib import Path
 import time
 import yaml
 from llm_benchmark import squeue
+import pandas as pd
+from llm_benchmark.reports import extract_raw, scrape_from_logs
 
 class RunStatus(Enum):
     init = "init"
@@ -106,14 +108,33 @@ class Run:
                 n_nodes=self.n_nodes,
                 n_proc_per_node=self.n_proc_per_node,
                 max_time=str(self.config["cluster"]["max_minutes_per_run"]) + ":00",
-                hf_home=self.config["HF_HOME"],
                 wandb_api_key=self.config["WANDB_API_KEY"],
                 container_toml=self.config["cluster"]["container"],
                 megatron_path=self.config["framework"]["FRAMEWORK_HOME"],
+                env_vars=self.get_env_vars(self.config["cluster"]["env_vars"]),
                 megatron_args=self.get_megatron_args(self.config["framework"]["framework_setting"]),
             )
         else: 
             raise NotImplementedError()
+
+    def get_env_vars(self, env_vars: Dict) -> str:
+        env_vars_list = []
+        if env_vars is None:
+            return ""
+        for k, v in env_vars.items():
+            if not v:
+                continue
+            env_vars_list.append(f"export {k}={v}")
+        return "\n".join(env_vars_list)
+
+    def flatten_cfg(self, config: Dict) -> Dict:
+        flat = {}
+        for k, v in config.items():
+            if isinstance(v, dict):
+                flat.update(self.flatten_cfg(v))
+            else:
+                flat[k] = v
+        return flat
 
     def get_megatron_args(self, config: Dict) -> str:
         args_list = []
@@ -124,10 +145,36 @@ class Run:
             else:
                 if isinstance(v, bool) and v:
                     args_list.append(f"--{k}")
+                elif isinstance(v, bool) and not v:
+                    pass
                 else:
                     assert v is not None, f"Value for {k} is None"
                     args_list.append(f"--{k} {v}")
         return " ".join(args_list)
+    
+    def write_report(self):
+        assert self.status == RunStatus.completed
+        # Write report.
+        path = self.home
+        log_dir = Path(self.config["logs_dir"])
+        old_df = None
+        # if file exists, read it and append new data.
+        if (log_dir/"report.csv").exists():
+            old_df = pd.read_csv(log_dir/"report.csv")
+        wandb_run_dir, = (path/"wandb").glob("run*")
+        wandb_file, = (child for child in wandb_run_dir.iterdir()
+                        if child.suffix == ".wandb" )
+        logs = extract_raw(wandb_file)
+        logs = logs.assign(**scrape_from_logs(path))
+        logs = logs.assign(**self.flatten_cfg(self.config["framework"]))
+        logs["tokens_per_sec"] = logs["batch-size"]*logs["seq_length"]/logs["iteration-time"]
+        logs["tokens_per_sec_per_gpu"] = logs["batch-size"]*logs["seq_length"]/logs["iteration-time"]/logs["world-size"]
+        logs = logs.sort_values("step").iloc[2:]
+        df = pd.concat([old_df, logs], ignore_index=True) if old_df is not None else logs
+        # overwrite old report.
+        df.to_csv(log_dir/"report.csv", index=False)
+        
+        
 
 def is_oom(home: Path) -> bool:
     # Check log, if "OutOfMemoryError" is mentioned, then we set OOM as status.
@@ -158,6 +205,7 @@ def wait(t: float):
 
 
 def schedule_runs(configs: list[Dict], gpu_budget: int):
+    user = configs[0]["cluster"]["user"]
     # Print info.
     print("Scheduling", len(configs), "runs:")
     print(*configs, sep="\n")
@@ -180,12 +228,11 @@ def schedule_runs(configs: list[Dict], gpu_budget: int):
             continue
 
         # Wait until we have all available GPUs.
-        user = run.config["cluster"]["user"]
         while squeue.used_nodes(user) + run.n_nodes > gpu_budget//run.n_proc_per_node:
             current_runs = ",".join(str(run.run_id) for run in runs
                                     if run.status == RunStatus.running)
             print("Can't start this run with current GPU budget, used nodes:",
-                  squeue.used_nodes(), "Runs:", current_runs, "Waiting",
+                  squeue.used_nodes(user), "Runs:", current_runs, "Waiting",
                   end="", flush=True)
             wait(10)
         print("GPU resources available, starting run!")
@@ -203,12 +250,19 @@ def schedule_runs(configs: list[Dict], gpu_budget: int):
     # Wait until all jobs end.
     print("All runs have been scheduled, waiting for them to end...")
     while len(remaining := sorted([run for run in runs if run.status == RunStatus.running])):
-        print("Waiting for", len(remaining), "runs, using", squeue.used_nodes(),
+        print("Waiting for", len(remaining), "runs, using", squeue.used_nodes(user),
               "nodes. Runs:", ",".join(run.run_id for run in remaining), end="", flush=True)
         wait(10)
     print("All runs have ended! Congrats! Now run the analyze tool")
     print("---")
     print()
+    
+    for run in runs:
+        if run.status == RunStatus.completed:
+            try:
+                run.write_report()
+            except IndexError as e:
+                print("Warning: Failed to open wandb file.")
 
     # Print final stats.
     print("Final stats:")

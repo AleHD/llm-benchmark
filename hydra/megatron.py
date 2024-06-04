@@ -73,6 +73,15 @@ def estimate_memory_usage_in_gb(tp: int, pp: int, dp: int, act_layers: int, mode
     print(f"model_memory: {model_memory / 10e9}, act_memory_per_mbs: {act_memory_per_mbs / 10e9}")
     return model_memory / 10e9, act_memory_per_mbs / 10e9
 
+def get_list_from_cfg(cfg: Any, auto_list: List) -> List:
+    if cfg == "auto":
+        return auto_list    
+    elif isinstance(cfg, ListConfig):
+        res_list = OmegaConf.to_container(cfg, resolve=True)
+    elif isinstance(cfg, int):
+        res_list = [cfg]
+    return res_list
+
 def generate_candidate_configs(train_cfg: DictConfig, network_cfg: DictConfig, model_size_in_b: int, vocab_size: int) -> List[Dict[str, int]]:
     valid_configs = []
     
@@ -87,67 +96,53 @@ def generate_candidate_configs(train_cfg: DictConfig, network_cfg: DictConfig, m
     nodes = train_cfg.get("num_nodes")
     gpus_per_node = train_cfg.get("gpus_per_node")
     assert gpus_per_node == 4
-    gpu_memory_gb = train_cfg.get("gpu_memory_gb")    
-    gpu_count = nodes * gpus_per_node    
+    gpu_memory_gb = train_cfg.get("gpu_memory_gb")
     
-    if tensor_parallel_sizes == "auto":
-        tp_l = [1, 2, 4]
-    elif isinstance(tensor_parallel_sizes, ListConfig):
-        tp_l = OmegaConf.to_container(tensor_parallel_sizes, resolve=True)
-    elif isinstance(tensor_parallel_sizes, int):
-        tp_l = [tensor_parallel_sizes]
-        
-    if pipeline_parallel_sizes == "auto":
-        pp_l = [x for x in range(1, num_layers + 1) if num_layers % x == 0]
-        if max_pp_size:
-            pp_l = [x for x in pp_l if x <= max_pp_size]
-    elif isinstance(pipeline_parallel_sizes, ListConfig):
-        pp_l = OmegaConf.to_container(pipeline_parallel_sizes, resolve=True)
-    elif isinstance(pipeline_parallel_sizes, int):
-        pp_l = [pipeline_parallel_sizes]
-        
-    if micro_batch_sizes == "auto":
-        mbs_l = None
-    elif isinstance(micro_batch_sizes, ListConfig):
-        mbs_l = OmegaConf.to_container(micro_batch_sizes, resolve=True)
-    elif isinstance(micro_batch_sizes, int):
-        mbs_l = [micro_batch_sizes]
+    node_l = get_list_from_cfg(nodes, None)
     
-    # print(type(act_ckpt_layers))
-    if act_ckpt_layers == "auto":
-        act_layers_l = [0, 1]
-    elif isinstance(act_ckpt_layers, ListConfig):
-        act_layers_l = OmegaConf.to_container(act_ckpt_layers, resolve=True)
-    elif isinstance(act_ckpt_layers, int):
-        act_layers_l = [act_ckpt_layers]
+    tp_l = get_list_from_cfg(tensor_parallel_sizes, [1, 2, 4])
+        
+    default_pp_l = [x for x in range(1, num_layers + 1) if num_layers % x == 0]
+    if max_pp_size:
+        default_pp_l = [x for x in default_pp_l if x <= max_pp_size]
+    pp_l = get_list_from_cfg(pipeline_parallel_sizes, default_pp_l)
+
+    mbs_l = get_list_from_cfg(micro_batch_sizes, None)
+    
+    act_layers_l = get_list_from_cfg(act_ckpt_layers, [0, 1, 2])
     
     for tp in tp_l:
         for pp in pp_l:
-            if gpu_count % (tp * pp) != 0:
-                continue
-            dp = gpu_count // (tp * pp)
-            if max_dp_size and dp > max_dp_size:
-                continue
-            for act_layers in act_layers_l:
-                if act_layers >= num_layers // pp:
+            if node_l is None:
+                node_l = [tp*pp//4]
+            for node in node_l:
+                gpu_count = node * gpus_per_node
+                
+                if gpu_count % (tp * pp) != 0:
                     continue
-                old_mbs_l = mbs_l
-                if mbs_l is None:
-                    # auto select mbs 
-                    safe_factor = 4
-                    model_mem, act_mem_per_mbs = estimate_memory_usage_in_gb(tp, pp, dp, act_layers, model_size_in_b, vocab_size, network_cfg)
-                    max_mbs = math.floor((gpu_memory_gb - model_mem) / act_mem_per_mbs / safe_factor)
-                    if max_mbs <= 1:
-                        mbs_l = [1]
-                    elif max_mbs <= 2:
-                        mbs_l = [1, 2]
-                    else:
-                        log_max_mbs = int(math.log2(max_mbs))
-                        mbs_l = [2 ** i for i in [0, log_max_mbs//2, log_max_mbs]]
-                for mbs in mbs_l:
-                    gbs = dp * mbs * pp * 4
-                    valid_configs.append({"tp": tp, "pp": pp, "dp": dp, "mbs": mbs, "gbs": gbs, "act_layers": act_layers})
-                mbs_l = old_mbs_l
+                dp = gpu_count // (tp * pp)
+                if max_dp_size and dp > max_dp_size:
+                    continue
+                for act_layers in act_layers_l:
+                    if act_layers >= num_layers // pp:
+                        continue
+                    old_mbs_l = mbs_l
+                    if mbs_l is None:
+                        # auto select mbs 
+                        safe_factor = 4
+                        model_mem, act_mem_per_mbs = estimate_memory_usage_in_gb(tp, pp, dp, act_layers, model_size_in_b, vocab_size, network_cfg)
+                        max_mbs = math.floor((gpu_memory_gb - model_mem) / act_mem_per_mbs / safe_factor)
+                        if max_mbs <= 1:
+                            mbs_l = [1]
+                        elif max_mbs <= 2:
+                            mbs_l = [1, 2]
+                        else:
+                            log_max_mbs = int(math.log2(max_mbs))
+                            mbs_l = [2 ** i for i in [0, log_max_mbs//2, log_max_mbs]]
+                    for mbs in mbs_l:
+                        gbs = dp * mbs * pp * 4
+                        valid_configs.append({"nodes": node, "tp": tp, "pp": pp, "dp": dp, "mbs": mbs, "gbs": gbs, "act_layers": act_layers})
+                    mbs_l = old_mbs_l
 
     return valid_configs                  
     
@@ -192,6 +187,7 @@ def run_megatron_configs(cfg: omegaconf.dictconfig.DictConfig) -> None:
     run_configs = []
     for config in valid_configs:
         new_cfg = deepcopy(cfg)
+        new_cfg.train_settings.num_nodes = config["nodes"]
         new_cfg.framework.framework_setting.distributed.tensor_model_parallel_size = config["tp"]
         new_cfg.framework.framework_setting.distributed.pipeline_model_parallel_size = config["pp"]
         new_cfg.framework.framework_setting.distributed.use_distributed_optimizer = True if config["dp"] > 1 else False
@@ -203,7 +199,7 @@ def run_megatron_configs(cfg: omegaconf.dictconfig.DictConfig) -> None:
         # TODO: check if args are valid according to the arguments.py
         
         megatron_opt_cfg: DictConfig = new_cfg.framework.framework_setting.optimization
-        expand_opt_cfg(megatron_opt_cfg, megatron_network_cfg)
+        expand_opt_cfg(megatron_opt_cfg, new_cfg)
         run_configs.append(deepcopy(OmegaConf.to_container(new_cfg, resolve=True)))
     
     schedule_runs(run_configs, gpu_budget=4*32)

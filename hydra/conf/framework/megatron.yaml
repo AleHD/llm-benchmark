@@ -1,6 +1,6 @@
 framework_name: megatron
 
-FRAMEWORK_HOME: TODO
+FRAMEWORK_HOME: /bret/scratch/cscs/ctianche/playground/Megatron-LM/
 
 model_framework:
   llama3:
@@ -32,6 +32,10 @@ framework_setting:
   logging:
     log_throughput: true
     timing_log_level: 0
+    log-timers-to-tensorboard: true
+    log-batch-size-to-tensorboard: true
+    log-memory-to-tensorboard: true
+    log-world-size-to-tensorboard: true
     wandb_project: ${framework.framework_name}_${model.model_type}
     wandb_exp_name: tp${framework.framework_setting.distributed.tensor_model_parallel_size}pp${framework.framework_setting.distributed.pipeline_model_parallel_size}mbs${framework.framework_setting.training.micro_batch_size}
   training:
@@ -43,19 +47,23 @@ framework_setting:
     use_flash_attn: true
     optimizer: adam
     sequence_parallel: true
-    use_mcore_models: true
   mixed_precision:
     bf16: true
   optimization:
     recompute_per_n_layers: # >0 means recompute, need reinterpretation
     no_check_for_nan_in_loss_and_grad: true # only for throughput benchmark
     tp_overlap: # none means default, need reinterpretation
-    dp_overlap: # need reinterpretation
+    dp_overlap: true # need reinterpretation
     interleaved_pp: false
+    use_mcore_models: true
+    transformer_impl: transformer_engine  # local
   distributed:
     tensor_model_parallel_size:
     pipeline_model_parallel_size:
     use_distributed_optimizer:
+  lr:
+    lr: 3e-5
+    lr_warmup_fraction: 0.1
   data:
     data_path: ${data_dir}
     split: "949,50,1"
