@@ -40,9 +40,8 @@ def schedule_run(config: dict[str, str], logs_root: Path, project_name: str,
             config[key] = val
 
     cmd = ["python", str(launcher)] + [f"{key}={value}" for key, value in config.items()]
-
     with Popen(cmd, stdout=PIPE, stderr=PIPE, text=True) as proc:
-        assert proc.wait() == 0, "".join(proc.stderr)
+        assert proc.wait() == 0, "".join(proc.stderr) + "\n" + "".join(proc.stdout)
         jobid = None
         run_dir = None
         for line in proc.stdout:
