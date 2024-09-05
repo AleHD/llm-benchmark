@@ -1,0 +1,14 @@
+poetry.lock
+
+runs/*
+!runs/README.txt
+
+reports/*
+!reports/README.txt
+
+configs/*
+!configs/llama3_8b.toml
+
+llm_benchmark/__pycache__
+
+**/.*.swp

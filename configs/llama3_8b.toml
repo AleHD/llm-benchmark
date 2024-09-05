@@ -1,0 +1,31 @@
+# This is a config.toml example.
+# Provide all your default configurations under [defaults].
+[defaults]
+"nanotron" = "llama3_8b"
+"nanotron.parallelism.pp" = "1"
+"nanotron.parallelism.tp" = "4"
+"nanotron.tokens.batch_accumulation_per_replica" = "16"
+"nanotron.parallelism.tp_linear_async_communication" = "true"
+"+nanotron.parallelism.tp_recompute_allgather" = "false"
+
+# Next, provide all the configurations you want to test under several [[configs]] dicts:
+# Note that all keys are quoted (e.g. "nanotron.parallelism.dp" instead of nanotron.parallelism.dp).
+# This is because otherwise the toml will parse a dict `{nanotron: {parallelism: {dp: 1}}}`, but
+# we want to avoid this to use the swiss-ai/pretrain launcher more easily.
+[[configs]]
+"nanotron.tokens.micro_batch_size" = "3"
+"nanotron.parallelism.dp" = "1"
+
+[[configs]]
+"nanotron.tokens.micro_batch_size" = "3"
+"nanotron.parallelism.dp" = "2"
+
+[[configs]]
+"nanotron.tokens.micro_batch_size" = "3"
+"nanotron.parallelism.dp" = "4"
+
+# You can also override the defaults.
+[[configs]]
+"nanotron.tokens.micro_batch_size" = "4"
+"nanotron.parallelism.dp" = "4"
+"+nanotron.parallelism.tp_recompute_allgather" = "true"

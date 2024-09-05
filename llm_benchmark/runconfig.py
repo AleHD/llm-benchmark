@@ -25,6 +25,8 @@ class RunConfig:
     batch_accumulation: int = 4
     pp_engine: str = "1f1b"
     recompute_layer: bool = False
+    async_tp: bool = False
+    recompute_tp: bool = False
 
     def __post_init__(self):
         assert self.tp > 0

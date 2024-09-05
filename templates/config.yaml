@@ -19,11 +19,11 @@ optimizer:
   accumulate_grad_in_fp32: true
   clip_grad: 1.0
   learning_rate_scheduler:
-    learning_rate: 0.0001
+    learning_rate: 0.00001
     lr_decay_style: linear
     lr_warmup_style: linear
     lr_warmup_steps: 1
-    min_decay_lr: 1.0e-05
+    min_decay_lr: 1.0e-06
   optimizer_factory:
     adam_beta1: 0.9
     adam_beta2: 0.95
@@ -51,7 +51,7 @@ data_stages:
       seed: 42
 lighteval: null
 tokens:
-  train_steps: 20
+  train_steps: 15
   val_check_interval: -1
 logging:
   iteration_step_info_interval: 1
