@@ -24,6 +24,7 @@ if __name__ == "__main__":
     analyze_parser = subparsers.add_parser("analyze")
     analyze_parser.add_argument("out", type=Path, default=Path("reports/report"))
     analyze_parser.add_argument("-e", "--exist-ok", action="store_true")
+    analyze_parser.add_argument("-t", "--title", default="Scaling runs")
 
     # Call main.
     args = parser.parse_args()
@@ -32,6 +33,6 @@ if __name__ == "__main__":
     elif args.action == "status":
         show_status(args.run_dir.absolute())
     elif args.action == "analyze":
-        make_report(args.run_dir.absolute(), args.out.absolute(), args.exist_ok)
+        make_report(args.run_dir.absolute(), args.out.absolute(), args.exist_ok, args.title)
     else:
         raise KeyError(f"Unknown action {args.action}")
