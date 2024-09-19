@@ -66,6 +66,12 @@ def handle_maybe_schedulable_run(config: dict[str, str], logs_root: Path,
     #    If it succeeded, OOM'd, running then we ignore simply ignore the config as it was done before.
     # 4. If the match crashed before, then we will `rm -R` the old match and schedule again the job using the launcher.
 
+    def equivalent(config1: dict[str, str], config2: dict[str, str]) -> bool:
+        ignore_keys = {"run.slurm.time", "run.env.WANDB_API_KEY"}
+        config1 = {key: val for key, val in config1.items() if key not in ignore_keys}
+        config2 = {key: val for key, val in config2.items() if key not in ignore_keys}
+        return config1 == config2
+
     # First, we launch again with temporary directory.
     print("Attempting fake launch...")
     with TemporaryDirectory() as temp_dir:
@@ -78,8 +84,8 @@ def handle_maybe_schedulable_run(config: dict[str, str], logs_root: Path,
     # Now we try to get matches.
     print("Determining if there are matches of config supplied...")
     matches = [run_dir for run_dir in (logs_root/project_name).iterdir()
-               if nano_config == with_context(open(run_dir/"nanotron_config.yaml"),
-                                              lambda f: yaml.safe_load(f))]
+               if equivalent(nano_config, with_context(open(run_dir/"nanotron_config.yaml"),
+                                                       lambda f: yaml.safe_load(f)))]
     assert len(matches) <= 1
 
     if len(matches) == 1:
