@@ -42,7 +42,11 @@ def get_status(run_dir: Path) -> RunStatus:
         with Popen(["sacct", "--jobs", jobid, "--json"], stdout=PIPE, stderr=PIPE, text=True) as proc:
             json_txt = "".join(proc.stdout)
             assert proc.wait() == 0, "".join(proc.stderr)
-            job_state = json.loads(json_txt)["jobs"][0]["state"]["current"]
+            try:
+                job_state = json.loads(json_txt)["jobs"][0]["state"]["current"]
+            except IndexError:
+                warnings.warn("Couldn't find info for {jobid}. Are you using a different cluster? {run_dir}")
+                return RunStatus.running
     if isinstance(job_state, list):  # I don't know why sometimes the state is returned as list.
         job_state, = job_state
     assert isinstance(job_state, str)
