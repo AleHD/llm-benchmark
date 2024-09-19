@@ -71,8 +71,9 @@ def get_raw(run_dir: Path, skip_first_steps: bool = True,
 
     config_df = pd.DataFrame()
     metrics_df = pd.DataFrame()
-    for path in run_dir.iterdir():
-        print("Extracting logs from", path)
+    subdirs = list(run_dir.iterdir())
+    for i, path in enumerate(subdirs):
+        print(f"Extracting logs ({i+1}/{len(subdirs)}) from {path}")
         status = get_status(path)
         if status in {RunStatus.success, RunStatus.oom}:
             # Get config and jobid.
@@ -107,7 +108,7 @@ def get_raw(run_dir: Path, skip_first_steps: bool = True,
     return config_df, metrics_df
 
 
-def make_report(run_dir: Path, out: Path, exist_ok: bool):
+def make_report(run_dir: Path, out: Path, exist_ok: bool, title: str):
     # Prepare output dir.
     if out.exists():
         assert exist_ok, f"Out path exists and exist_ok is false: {out}"
@@ -161,14 +162,16 @@ def make_report(run_dir: Path, out: Path, exist_ok: bool):
         y_oom.append(carry*0.01*max_tok)
     fig.add_trace(go.Scatter(x=df.loc[df["oom"], "gpus"], y=y_oom, mode="markers", marker={"symbol": "x"},
                              customdata=df[df["oom"]], hovertemplate=hovertemplate_oom, name="OOM runs"))
+    fig.add_trace(go.Scatter(x=[df["gpus"].min(), df["gpus"].max()], y=[max_tok, max_tok], name="perfect scaling",
+                             line={"dash": "dash"}))
     fig.update_layout(xaxis={"title": "gpus", "type": "log"}, yaxis={"title": "tokens_per_sec_per_gpu"},
-                      title="Scaling runs")
+                      title=title)
     fig.write_html(out/"scaling_per_gpu.html")
 
     # Second plot: same as before but only the best in budget.
     fig = px.line(df[df["best_in_budget"]], x="gpus", y="tokens_per_sec_per_gpu", markers=True)
     fig.update_layout(xaxis={"title": "gpus", "type": "log"}, yaxis={"title": "tokens_per_sec_per_gpu"},
-                      title="Scaling runs")
+                      title=title)
     fig.write_html(out/"scaling_per_gpu_clean.html")
 
     # Write output csv.
