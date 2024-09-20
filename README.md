@@ -13,6 +13,7 @@ git clone https://github.com/AleHD/llm-benchmark.git
 ```
 
 Then, download the [swiss-ai/pretrain](https://github.com/swiss-ai/pretrain) repository to get the launcher.
+The latest commit tested to work with this version is `cbbf8b0ff339274cb7fe0b2731feefb51b471f1d`.
 ```
 git clone https://github.com/swiss-ai/pretrain.git
 ```
